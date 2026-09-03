@@ -8,21 +8,97 @@ The image is built from the pinned upstream release zip, verified by SHA-256, so
 this repo holds only config — no binaries, no bundle checkout, nothing
 machine-specific.
 
-## Quick start
+## Setting up on a new machine
+
+Assumes Docker Desktop is installed and running. Nothing else is needed — no
+Java, no Solr, no Tomcat.
+
+### 1. Give Docker enough memory
+
+Docker Desktop → Settings → Resources. Allow **at least 8 GB**; 12 GB is
+comfortable. The default on some installs is lower, and Solr will fail to start
+or the indexer will be killed mid-file if it is too tight. Apply & Restart.
+
+### 2. Get the repo
 
 ```bash
-cp .env.example .env          # then edit SW_WARC_DIR
-docker compose up -d          # first run builds the image (~1 GB download)
+git clone <this-repo-url> solrwayback-docker
+cd solrwayback-docker
 ```
 
-Drop `.warc` / `.warc.gz` files into the folder `SW_WARC_DIR` points at, then:
+### 3. Create your configuration
+
+```bash
+cp .env.example .env
+```
+
+The defaults work as-is. `SW_WARC_DIR=./warcs` means the `warcs/` folder in the
+checkout is where your WARC files go. Point it somewhere else if your archive
+already lives elsewhere — an absolute path is fine.
+
+### 4. Add WARC files
+
+Copy or move any `.warc` / `.warc.gz` (or `.arc` / `.arc.gz`) files into the
+folder from step 3:
+
+```bash
+cp /path/to/your/*.warc.gz warcs/
+```
+
+Filenames must be unique, including across subfolders. You can also do this
+later, while the stack is running.
+
+### 5. Start it
+
+```bash
+docker compose up -d
+```
+
+The first run builds the image: it downloads the ~480 MB upstream SolrWayback
+bundle and verifies its checksum. Expect one to a few minutes depending on your
+connection; later starts take seconds. Watch it come up with:
+
+```bash
+docker compose logs -f
+```
+
+At this point <http://localhost:8090/solrwayback/> is live but the archive is
+empty — Solr has a collection with zero documents in it.
+
+### 6. Index your WARCs
 
 ```bash
 docker compose exec solrwayback index
 ```
 
-Open <http://localhost:8090/solrwayback/>. Indexing is incremental — rerun the
-same command after adding more WARCs and only the new ones are processed.
+This is the slow step: roughly **15 GB of WARC per hour** at the default
+`INDEX_THREADS=2`, and about 20 GB/hour at 4. Budget accordingly. It prints one
+line per WARC and issues a Solr commit at the end — nothing is searchable until
+it finishes.
+
+### 7. Use it
+
+Open <http://localhost:8090/solrwayback/> and search. Solr's own admin UI is at
+<http://localhost:8990/solr/> if you need it.
+
+### Adding more WARCs later
+
+Drop the new files into the same folder and rerun the same command:
+
+```bash
+docker compose exec solrwayback index
+```
+
+Already-indexed WARCs are skipped, so only the new ones cost you time.
+
+### Everyday commands
+
+```bash
+docker compose stop      # stop, keeping the index
+docker compose up -d     # start again
+docker compose logs -f   # follow logs
+docker compose down -v   # delete the index and start over (WARCs are safe)
+```
 
 ## Configuration
 
@@ -69,9 +145,14 @@ docker compose exec solrwayback index warcs1/one.warc.gz     # a single WARC
 Progress logs land in the `index-status` volume, one per WARC. That is also how
 already-indexed files are skipped; delete a WARC's `.log` to force a reindex.
 
-As a rough guide, 6.2 GB across 19 WARCs took **19 minutes** with
-`INDEX_THREADS=4` on an M4 Pro with 6 CPUs and 12 GB allotted to Docker — call
-it 20 GB/hour. It scales with `INDEX_THREADS` until you run out of RAM.
+Measured on an M4 Pro with 6 CPUs and 12 GB allotted to Docker:
+
+| WARCs | Size | Threads | Time |
+|---|---|---|---|
+| 19 | 6.2 GB | 4 | 19 min (~20 GB/h) |
+| 2 | 0.9 GB | 2 | 4 min (~15 GB/h) |
+
+It scales with `INDEX_THREADS` until you run out of RAM.
 
 Two things to know:
 

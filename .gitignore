@@ -1,5 +1,8 @@
-# Local configuration
+# Local configuration. Ignore every .env variant (including backups and
+# per-machine copies) except the committed template.
 .env
+.env.*
+!.env.example
 
 # WARC files live here by default; keep the directory, not its contents, so the
 # default bind mount target exists on a fresh clone.
