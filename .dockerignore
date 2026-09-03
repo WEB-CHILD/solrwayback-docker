@@ -1,0 +1,5 @@
+.env
+.env.example
+warcs/
+conf/
+README.md

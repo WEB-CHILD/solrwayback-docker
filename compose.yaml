@@ -1,0 +1,50 @@
+# Project name is pinned so Docker volume names do not depend on what the
+# checkout directory happens to be called.
+name: solrwayback
+
+services:
+  solrwayback:
+    build:
+      context: .
+      args:
+        SW_VERSION: "${SW_VERSION:-5.4.3}"
+    image: "solrwayback:${SW_VERSION:-5.4.3}"
+
+    ports:
+      - "${SW_HTTP_PORT:-8090}:8080"
+      - "${SW_SOLR_PORT:-8990}:8983"
+
+    environment:
+      # Host-facing port; SolrWayback rewrites playback links to it.
+      SW_HTTP_PORT: "${SW_HTTP_PORT:-8090}"
+      SW_HEAP: "${SW_HEAP:-3g}"
+      INDEX_THREADS: "${INDEX_THREADS:-2}"
+
+    volumes:
+      # ---------------------------------------------------------------------
+      # DO NOT change the container side of this mount.
+      #
+      # The indexer writes the path it sees into source_file_path on every
+      # document, permanently. Change /opt/solrwayback/indexing/warcs1 and
+      # every already-indexed document loses playback. The HOST side
+      # (SW_WARC_DIR) is the knob; the container side is a constant.
+      # ---------------------------------------------------------------------
+      - "${SW_WARC_DIR:-./warcs}:/opt/solrwayback/indexing/warcs1:ro"
+
+      # Named volumes, not bind mounts: both are write-heavy during indexing,
+      # and bind mounts on Docker Desktop go through VirtioFS. Docker populates
+      # a fresh named volume from the image, which is what seeds the empty
+      # netarchivebuilder collection and its ZooKeeper state on first run.
+      - solr-home:/opt/solrwayback/solr-9/server/solr
+      - index-status:/opt/solrwayback/indexing/status
+
+      # Optional escape hatch: drop a solrwayback.properties or
+      # solrwaybackweb.properties in ./conf to override the generated one.
+      - ./conf:/opt/solrwayback/conf-in:ro
+
+    # Solr and ZooKeeper need time to close cleanly.
+    stop_grace_period: 90s
+
+volumes:
+  solr-home:
+  index-status:

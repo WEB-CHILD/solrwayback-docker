@@ -1,0 +1,10 @@
+# Local configuration
+.env
+
+# WARC files live here by default; keep the directory, not its contents, so the
+# default bind mount target exists on a fresh clone.
+warcs/*
+!warcs/.gitkeep
+
+# Operator property overrides
+conf/*.properties

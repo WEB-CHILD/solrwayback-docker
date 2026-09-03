@@ -1,0 +1,63 @@
+#!/bin/bash
+# Index WARCs into the running Solr.
+#
+#   index                 # everything under indexing/warcs1 (the bind mount)
+#   index warcs1 warcs2   # named subfolders
+#   index warcs1/one.warc.gz
+#
+# Already-indexed WARCs are skipped: warc-indexer.sh tracks them by log file in
+# the status volume. Delete a WARC's .log there to force a reindex.
+set -euo pipefail
+
+SW_HOME="${SW_HOME:-/opt/solrwayback}"
+INDEXING="${SW_HOME}/indexing"
+
+targets=("$@")
+if [[ ${#targets[@]} -eq 0 ]]; then
+    targets=(warcs1)
+fi
+
+# Resolve to absolute paths. warc-indexer canonicalises internally anyway, but
+# being explicit keeps source_file_path in the index predictable.
+abs=()
+for t in "${targets[@]}"; do
+    if [[ "$t" = /* ]]; then abs+=("$t"); else abs+=("${INDEXING}/${t}"); fi
+done
+
+for t in "${abs[@]}"; do
+    if [[ ! -e "$t" ]]; then
+        echo "error: no such WARC or folder: $t" >&2
+        exit 1
+    fi
+done
+
+# warc-indexer.sh hard-fails (exit 21) on duplicate basenames; say so up front.
+dupes=$(find "${abs[@]}" \( -iname '*.warc' -o -iname '*.warc.gz' \
+                          -o -iname '*.arc' -o -iname '*.arc.gz' \) -type f 2>/dev/null \
+        | sed 's#.*/##' | sort | uniq -d)
+if [[ -n "$dupes" ]]; then
+    echo "error: duplicate WARC filenames - the indexer requires unique basenames:" >&2
+    echo "$dupes" | sed 's/^/  /' >&2
+    exit 1
+fi
+
+export SOLR_URL="http://localhost:${SW_SOLR_INTERNAL_PORT:-8983}/solr/netarchivebuilder"
+export THREADS="${INDEX_THREADS:-2}"
+export STATUS_ROOT="${INDEXING}/status"
+export TMP_ROOT="${INDEXING}/status/tmp"
+
+# Recover from an interrupted run. warc-indexer.sh treats a WARC as done once
+# its .log exists, but a run killed mid-file (container stopped, machine slept)
+# leaves a .tmp folder behind alongside that log. Clear both so the WARC is
+# processed again. Reindexing is safe: document ids are derived from record
+# content, so a repeat overwrites rather than duplicating.
+shopt -s nullglob
+for tmp in "${TMP_ROOT}"/*.tmp; do
+    base=$(basename "$tmp" .tmp)
+    echo "recovering interrupted WARC: ${base}"
+    rm -rf "$tmp" "${STATUS_ROOT}/${base}.log"
+done
+shopt -u nullglob
+
+cd "$INDEXING"
+exec ./warc-indexer.sh "${abs[@]}"
