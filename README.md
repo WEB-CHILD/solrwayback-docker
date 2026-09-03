@@ -8,97 +8,72 @@ The image is built from the pinned upstream release zip, verified by SHA-256, so
 this repo holds only config — no binaries, no bundle checkout, nothing
 machine-specific.
 
-## Setting up on a new machine
+## Setting up (macOS, no terminal needed)
 
-Assumes Docker Desktop is installed and running. Nothing else is needed — no
-Java, no Solr, no Tomcat.
+Docker Desktop must be installed: <https://www.docker.com/products/docker-desktop/>
+Nothing else — no Java, no Solr, no Tomcat.
 
-### 1. Give Docker enough memory
+1. **Download this folder** and put it somewhere permanent, e.g. your
+   Documents folder.
+2. **Put your web archives in the `warcs` folder** — any `.warc` or `.warc.gz`
+   files. You can add more later.
+3. **Double-click `Start SolrWayback`.**
 
-Docker Desktop → Settings → Resources. Allow **at least 8 GB**; 12 GB is
-comfortable. The default on some installs is lower, and Solr will fail to start
-or the indexer will be killed mid-file if it is too tight. Apply & Restart.
+That is it. A terminal window opens and reports progress; the first run takes a
+few minutes while it downloads SolrWayback. Your browser opens automatically
+when it is ready.
 
-### 2. Get the repo
+Any new archive files are indexed automatically. Large archives take a while —
+roughly an hour per 15 GB — and the site fills in as it goes, so you can search
+while it works.
 
-```bash
-git clone <this-repo-url> solrwayback-docker
-cd solrwayback-docker
-```
+To add more archives later: drop them in the `warcs` folder and double-click
+`Start SolrWayback` again. Files already indexed are skipped.
 
-### 3. Create your configuration
+To shut down: double-click `Stop SolrWayback`. Your archive is kept.
 
-```bash
-cp .env.example .env
-```
+> **First time on macOS:** the system may refuse to open a downloaded script.
+> Right-click `Start SolrWayback` → **Open** → **Open**. You only do this once.
 
-The defaults work as-is. `SW_WARC_DIR=./warcs` means the `warcs/` folder in the
-checkout is where your WARC files go. Point it somewhere else if your archive
-already lives elsewhere — an absolute path is fine.
+### From the command line
 
-### 4. Add WARC files
-
-Copy or move any `.warc` / `.warc.gz` (or `.arc` / `.arc.gz`) files into the
-folder from step 3:
+If you would rather drive it yourself:
 
 ```bash
-cp /path/to/your/*.warc.gz warcs/
+docker compose up -d      # start (builds or pulls the image as needed)
+docker compose logs -f    # watch progress
+docker compose stop       # stop, keeping the index
+docker compose down -v    # delete the index and start over
 ```
 
-Filenames must be unique, including across subfolders. You can also do this
-later, while the stack is running.
+No `.env` file is required — every setting has a working default. Copy
+`.env.example` to `.env` only if you want to change something.
 
-### 5. Start it
-
-```bash
-docker compose up -d
-```
-
-The first run builds the image: it downloads the ~480 MB upstream SolrWayback
-bundle and verifies its checksum. Expect one to a few minutes depending on your
-connection; later starts take seconds. Watch it come up with:
-
-```bash
-docker compose logs -f
-```
-
-At this point <http://localhost:8090/solrwayback/> is live but the archive is
-empty — Solr has a collection with zero documents in it.
-
-### 6. Index your WARCs
+To index manually rather than on startup, set `AUTO_INDEX=false` in `.env` and
+run:
 
 ```bash
 docker compose exec solrwayback index
 ```
 
-This is the slow step: roughly **15 GB of WARC per hour** at the default
-`INDEX_THREADS=2`, and about 20 GB/hour at 4. Budget accordingly. It prints one
-line per WARC and issues a Solr commit at the end — nothing is searchable until
-it finishes.
+## Publishing the image (maintainer only)
 
-### 7. Use it
-
-Open <http://localhost:8090/solrwayback/> and search. Solr's own admin UI is at
-<http://localhost:8990/solr/> if you need it.
-
-### Adding more WARCs later
-
-Drop the new files into the same folder and rerun the same command:
+Users pull a prebuilt image rather than building locally. To publish a new one:
 
 ```bash
-docker compose exec solrwayback index
+# One-time: a GitHub token with the write:packages scope
+echo "$TOKEN" | docker login ghcr.io -u <github-username> --password-stdin
+
+./publish.sh
 ```
 
-Already-indexed WARCs are skipped, so only the new ones cost you time.
+`publish.sh` builds for both Apple Silicon and Intel and pushes to
+`ghcr.io/jorntx/solrwayback`. Build for both: a single-architecture image fails
+on the other kind of Mac. Make the package **public** in its GitHub settings,
+or users will be prompted to log in.
 
-### Everyday commands
-
-```bash
-docker compose stop      # stop, keeping the index
-docker compose up -d     # start again
-docker compose logs -f   # follow logs
-docker compose down -v   # delete the index and start over (WARCs are safe)
-```
+If no published image exists, `docker compose up` and the Start script both
+fall back to building locally, so the project works either way.
 
 ## Configuration
 

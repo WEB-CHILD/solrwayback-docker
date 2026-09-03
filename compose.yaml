@@ -8,7 +8,9 @@ services:
       context: .
       args:
         SW_VERSION: "${SW_VERSION:-5.4.3}"
-    image: "solrwayback:${SW_VERSION:-5.4.3}"
+    # Published image, so users pull rather than build. The build section above
+    # stays as a fallback: if the image cannot be pulled, Compose builds it.
+    image: "${SW_IMAGE:-ghcr.io/jorntx/solrwayback}:${SW_VERSION:-5.4.3}"
 
     ports:
       - "${SW_HTTP_PORT:-8090}:8080"
@@ -19,6 +21,8 @@ services:
       SW_HTTP_PORT: "${SW_HTTP_PORT:-8090}"
       SW_HEAP: "${SW_HEAP:-3g}"
       INDEX_THREADS: "${INDEX_THREADS:-2}"
+      # Index new WARCs automatically on startup, so users never run a command.
+      AUTO_INDEX: "${AUTO_INDEX:-true}"
 
     volumes:
       # ---------------------------------------------------------------------

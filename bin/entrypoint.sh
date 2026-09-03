@@ -100,7 +100,24 @@ log "starting Tomcat on ${SW_HTTP_INTERNAL_PORT:-8080} (published as ${SW_HTTP_P
 TOMCAT_PID=$!
 
 log "SolrWayback will be available at http://localhost:${SW_HTTP_PORT}/solrwayback/"
-log "index WARCs with: docker compose exec solrwayback index"
+
+# Index any WARCs that have not been processed yet, once the UI is serving.
+# Runs in the background so the site is usable immediately; already-indexed
+# files are skipped, so a restart with nothing new costs a couple of seconds.
+if [[ "${AUTO_INDEX:-true}" == "true" ]]; then
+    (
+        for _ in $(seq 1 60); do
+            curl -fsS "http://localhost:${SW_HTTP_INTERNAL_PORT:-8080}/solrwayback/" \
+                >/dev/null 2>&1 && break
+            sleep 5
+        done
+        log "auto-index: checking for new WARCs"
+        /usr/local/bin/index 2>&1 | sed 's/^/[auto-index] /'
+        log "auto-index: done"
+    ) &
+else
+    log "auto-index disabled; index manually with: docker compose exec solrwayback index"
+fi
 
 # `wait` returns immediately when a trapped signal arrives, so loop until the
 # child is genuinely gone.

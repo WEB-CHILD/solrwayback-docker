@@ -41,6 +41,14 @@ if [[ -n "$dupes" ]]; then
     exit 1
 fi
 
+# An empty WARC folder is a normal state (nothing added yet), not an error.
+# warc-indexer.sh would exit 11 here, which would look like a failure.
+if [[ -z "$(find "${abs[@]}" \( -iname '*.warc' -o -iname '*.warc.gz' \
+                              -o -iname '*.arc' -o -iname '*.arc.gz' \) -type f 2>/dev/null | head -1)" ]]; then
+    echo "No WARC files found yet. Add .warc or .warc.gz files and run this again."
+    exit 0
+fi
+
 export SOLR_URL="http://localhost:${SW_SOLR_INTERNAL_PORT:-8983}/solr/netarchivebuilder"
 export THREADS="${INDEX_THREADS:-2}"
 export STATUS_ROOT="${INDEXING}/status"
