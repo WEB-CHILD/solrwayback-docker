@@ -17,8 +17,9 @@ no Tomcat.
 
 1. **Download this folder.** Go to
    <https://github.com/WEB-CHILD/solrwayback-docker>, click the green **Code**
-   button, choose **Download ZIP**, then unzip it. Put the resulting
-   `solrwayback-docker` folder somewhere permanent, e.g. your Documents folder.
+   button, choose **Download ZIP**, then unzip it. The unzipped folder is named
+   `solrwayback-docker-main`; put it somewhere permanent, e.g. your Documents
+   folder. You can rename it to anything you like.
 2. **Put your web archives in the `warcs` folder** — any `.warc` or `.warc.gz`
    files. You can add more later.
 3. **Double-click the Start file for your system:**
