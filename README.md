@@ -15,8 +15,10 @@ Docker must be installed. On macOS and Windows that means Docker Desktop:
 <https://docs.docker.com/engine/install/>. Nothing else — no Java, no Solr,
 no Tomcat.
 
-1. **Download this folder** and put it somewhere permanent, e.g. your
-   Documents folder.
+1. **Download this folder.** Go to
+   <https://github.com/WEB-CHILD/solrwayback-docker>, click the green **Code**
+   button, choose **Download ZIP**, then unzip it. Put the resulting
+   `solrwayback-docker` folder somewhere permanent, e.g. your Documents folder.
 2. **Put your web archives in the `warcs` folder** — any `.warc` or `.warc.gz`
    files. You can add more later.
 3. **Double-click the Start file for your system:**
@@ -84,42 +86,61 @@ Users pull a prebuilt image rather than building it themselves. The image lives
 in the GitHub Container Registry (`ghcr.io`) under the WEB-CHILD organisation,
 as `ghcr.io/web-child/solrwayback`.
 
-**One-time setup**
-
-1. Create a **classic** personal access token at
-   <https://github.com/settings/tokens> with the `write:packages` scope.
-   Fine-grained tokens cannot write to the container registry.
-2. If WEB-CHILD enforces SAML SSO, click **Configure SSO** on the token and
-   authorise the organisation. Without that, every push fails with 403.
-3. Log Docker in. The username is your own GitHub login, not the org name --
-   the token is what grants access to the org:
-
-   ```bash
-   echo "$TOKEN" | docker login ghcr.io -u <your-github-username> --password-stdin
-   ```
+Publishing is automated by `.github/workflows/publish.yml`: pushing a tag shaped
+`v5.5.0` builds and pushes the image. No personal access token and no
+`docker login` are needed -- GitHub mints a scoped token for each run.
 
 **Every release**
 
+1. Get the checksum of the new upstream zip. Nothing publishes it, so compute
+   it from the file you intend to ship:
+
+   ```bash
+   VER=5.5.0
+   curl -fL -o /tmp/sw.zip \
+     "https://github.com/netarchivesuite/solrwayback/releases/download/${VER}/solrwayback_package_${VER}.zip"
+   shasum -a 256 /tmp/sw.zip
+   ```
+
+2. Update **both** `SW_VERSION` and `SW_SHA256` in the `Dockerfile`. The
+   workflow takes the version from the tag but always reads the checksum from
+   the `Dockerfile`, so a mismatched pair fails the build at the checksum step
+   rather than publishing a mislabelled image.
+
+3. Commit, then tag and push:
+
+   ```bash
+   git commit -am "SolrWayback 5.5.0"
+   git push
+   git tag v5.5.0 && git push origin v5.5.0
+   ```
+
+Watch the run on the repository's **Actions** tab. Each run pushes two tags:
+`:5.5.0` (immutable, what `compose.yaml` pins) and `:latest` (a moving
+pointer). Both are built for `linux/amd64` **and** `linux/arm64`, which is not
+optional: a single-architecture image fails outright on the other kind of
+machine.
+
+To rebuild without a new version -- after a `Dockerfile` fix, say -- use the
+**Run workflow** button on the Actions tab instead of tagging.
+
+**Break glass**
+
+If Actions is unavailable, the same push can be done by hand. It needs a
+**classic** personal access token with the `write:packages` scope
+(<https://github.com/settings/tokens>; fine-grained tokens cannot write to the
+container registry), SSO-authorised for WEB-CHILD if the org enforces it:
+
 ```bash
-./publish.sh                 # current version, from SW_VERSION in the script
-SW_VERSION=5.5.0 ./publish.sh   # or override it
+echo "$TOKEN" | docker login ghcr.io -u <your-github-username> --password-stdin
+docker buildx build --platform linux/amd64,linux/arm64 \
+    --build-arg SW_VERSION=5.5.0 \
+    -t ghcr.io/web-child/solrwayback:5.5.0 \
+    -t ghcr.io/web-child/solrwayback:latest --push .
 ```
 
-The script builds for `linux/amd64` **and** `linux/arm64` and pushes both under
-one tag. This is not optional: a plain `docker build && docker push` from an
-Apple Silicon Mac produces an arm64-only image that fails outright on every
-Intel Mac. `docker buildx` is what makes the two-architecture push possible; the
-script creates its builder on first run.
-
-Two tags are pushed each time: `:5.4.3` (immutable, what `compose.yaml` pins)
-and `:latest` (a moving pointer, for convenience).
-
-**After the first push only**
-
-Open <https://github.com/orgs/WEB-CHILD/packages>, pick `solrwayback`, then
-**Package settings -> Change visibility -> Public**. New packages are private by
-default, and a private one prompts every user for a login, which defeats the
-point. The setting persists across later pushes.
+The username is your own GitHub login, never the org name; the token is what
+grants access to the org.
 
 If no published image exists, or the pull fails, `docker compose up` and the
 Start script fall back to building locally, so the project works either way --
