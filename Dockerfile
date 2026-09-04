@@ -8,6 +8,14 @@ ARG SW_VERSION=5.4.3
 ARG SW_SHA256=833200a063ad2b8787d0068854a8f4fb27ce7a8b9658cd59b54d8ce593a6602c
 ARG SW_UID=1000
 
+# Links the published package to its GitHub repository. Without this label the
+# package is orphaned in the org and has to be managed by hand; with it, the
+# package inherits the repo's access and appears on the repo page.
+ARG SW_SOURCE=https://github.com/WEB-CHILD/solrwayback-docker
+LABEL org.opencontainers.image.source="${SW_SOURCE}" \
+      org.opencontainers.image.description="SolrWayback ${SW_VERSION}, ready to run" \
+      org.opencontainers.image.licenses="Apache-2.0"
+
 # SW_HOME is a FIXED container path. See the warning in compose.yaml before
 # changing it: it is recorded inside the Solr index for every document.
 ENV SW_HOME=/opt/solrwayback \

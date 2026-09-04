@@ -1,0 +1,124 @@
+# Builds the SolrWayback image and publishes it to the GitHub Container
+# Registry, so users pull a ready-made image instead of building one.
+#
+# To publish a release:
+#
+#     git tag v5.4.3
+#     git push origin v5.4.3
+#
+# ...or use the "Run workflow" button on the Actions tab.
+#
+# No personal access token is needed: GitHub mints a scoped token for each run.
+
+name: Publish image
+
+on:
+  # Any tag shaped like v5.4.3 triggers a publish.
+  push:
+    tags:
+      - "v*"
+
+  # Adds a "Run workflow" button on the Actions tab, for publishing without
+  # tagging (a rebuild after a Dockerfile fix, say).
+  workflow_dispatch:
+    inputs:
+      version:
+        description: "SolrWayback version to build (defaults to the Dockerfile's pinned version)"
+        required: false
+        default: ""
+
+# Least privilege: this workflow only reads the code and writes packages.
+permissions:
+  contents: read
+  packages: write
+
+jobs:
+  publish:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Check out the repository
+        uses: actions/checkout@v4
+
+      # ghcr.io requires a lowercase namespace, but a GitHub org can be
+      # capitalised (WEB-CHILD). Derive the image name rather than hardcoding
+      # it, so a fork publishes to its own namespace without edits.
+      #
+      # The version comes from the tag: refs/tags/v5.4.3 -> 5.4.3. If the tag
+      # names a version the Dockerfile has no matching SW_SHA256 for, the
+      # build fails at the checksum step rather than publishing a mislabelled
+      # image - so bump SW_VERSION and SW_SHA256 in the Dockerfile together,
+      # then tag.
+      - name: Work out the image name and version
+        id: vars
+        run: |
+          owner="$(echo "${{ github.repository_owner }}" | tr '[:upper:]' '[:lower:]')"
+          echo "image=ghcr.io/${owner}/solrwayback" >> "$GITHUB_OUTPUT"
+
+          version="${{ inputs.version }}"
+          if [ -z "$version" ] && [ "${GITHUB_REF_TYPE}" = "tag" ]; then
+            version="${GITHUB_REF_NAME#v}"
+          fi
+          if [ -z "$version" ]; then
+            version="$(grep -oE '^ARG SW_VERSION=.*' Dockerfile | cut -d= -f2)"
+          fi
+          echo "version=${version}" >> "$GITHUB_OUTPUT"
+          echo "Publishing version ${version}"
+
+      # Emulation for the architecture the runner is not. GitHub's runners are
+      # x86, so this is what makes the arm64 (Apple Silicon) half possible.
+      - name: Set up QEMU for cross-architecture builds
+        uses: docker/setup-qemu-action@v3
+
+      # buildx is the builder that can emit a multi-architecture image; the
+      # stock docker build cannot.
+      - name: Set up Docker buildx
+        uses: docker/setup-buildx-action@v3
+
+      # GITHUB_TOKEN is created for this run and expires with it. This is the
+      # step that replaces the manual "docker login ghcr.io" with a personal
+      # access token.
+      - name: Log in to the GitHub Container Registry
+        uses: docker/login-action@v3
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+      # Both architectures go up under one tag, as a manifest list: users get
+      # the right one automatically. A single-architecture image would fail
+      # outright on the other kind of machine.
+      #
+      # cache-from/to reuses layers between runs, so a rebuild that only
+      # changes a script does not re-download the SolrWayback bundle.
+      - name: Build and push
+        uses: docker/build-push-action@v6
+        with:
+          context: .
+          platforms: linux/amd64,linux/arm64
+          push: true
+          build-args: |
+            SW_VERSION=${{ steps.vars.outputs.version }}
+            SW_SOURCE=${{ github.server_url }}/${{ github.repository }}
+          tags: |
+            ${{ steps.vars.outputs.image }}:${{ steps.vars.outputs.version }}
+            ${{ steps.vars.outputs.image }}:latest
+          cache-from: type=gha
+          cache-to: type=gha,mode=max
+
+      - name: Summarise
+        run: |
+          {
+            echo "### Published"
+            echo
+            echo '```'
+            echo "${{ steps.vars.outputs.image }}:${{ steps.vars.outputs.version }}"
+            echo "${{ steps.vars.outputs.image }}:latest"
+            echo '```'
+            echo
+            echo "Architectures: linux/amd64, linux/arm64"
+            echo
+            echo "If this was the first publish, make the package **public** at"
+            echo "<https://github.com/orgs/${{ github.repository_owner }}/packages>"
+            echo "or users will be prompted to log in."
+          } >> "$GITHUB_STEP_SUMMARY"

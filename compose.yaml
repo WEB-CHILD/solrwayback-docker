@@ -10,7 +10,7 @@ services:
         SW_VERSION: "${SW_VERSION:-5.4.3}"
     # Published image, so users pull rather than build. The build section above
     # stays as a fallback: if the image cannot be pulled, Compose builds it.
-    image: "${SW_IMAGE:-ghcr.io/jorntx/solrwayback}:${SW_VERSION:-5.4.3}"
+    image: "${SW_IMAGE:-ghcr.io/web-child/solrwayback}:${SW_VERSION:-5.4.3}"
 
     ports:
       - "${SW_HTTP_PORT:-8090}:8080"

@@ -1,0 +1,9 @@
+# Shell scripts and the files copied into the image must keep LF endings.
+# A CRLF entrypoint.sh makes the container fail at startup with
+# "no such file or directory" pointing at a file that plainly exists,
+# because the shebang line ends in \r. Windows checkouts hit this via the
+# local-build fallback.
+* text=auto eol=lf
+
+# Windows launchers are the exception: cmd.exe wants CRLF.
+*.bat text eol=crlf

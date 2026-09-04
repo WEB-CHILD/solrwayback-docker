@@ -8,16 +8,24 @@ The image is built from the pinned upstream release zip, verified by SHA-256, so
 this repo holds only config — no binaries, no bundle checkout, nothing
 machine-specific.
 
-## Setting up (macOS, no terminal needed)
+## Setting up (no terminal needed)
 
-Docker Desktop must be installed: <https://www.docker.com/products/docker-desktop/>
-Nothing else — no Java, no Solr, no Tomcat.
+Docker must be installed. On macOS and Windows that means Docker Desktop:
+<https://www.docker.com/products/docker-desktop/>. On Linux, Docker Engine:
+<https://docs.docker.com/engine/install/>. Nothing else — no Java, no Solr,
+no Tomcat.
 
 1. **Download this folder** and put it somewhere permanent, e.g. your
    Documents folder.
 2. **Put your web archives in the `warcs` folder** — any `.warc` or `.warc.gz`
    files. You can add more later.
-3. **Double-click `Start SolrWayback`.**
+3. **Double-click the Start file for your system:**
+
+   | System | Start | Stop |
+   |---|---|---|
+   | macOS | `Start SolrWayback.command` | `Stop SolrWayback.command` |
+   | Windows | `Start SolrWayback.bat` | `Stop SolrWayback.bat` |
+   | Linux | `Start SolrWayback.sh` | `Stop SolrWayback.sh` |
 
 That is it. A terminal window opens and reports progress; the first run takes a
 few minutes while it downloads SolrWayback. Your browser opens automatically
@@ -32,8 +40,22 @@ To add more archives later: drop them in the `warcs` folder and double-click
 
 To shut down: double-click `Stop SolrWayback`. Your archive is kept.
 
-> **First time on macOS:** the system may refuse to open a downloaded script.
-> Right-click `Start SolrWayback` → **Open** → **Open**. You only do this once.
+### First-run notes per system
+
+> **macOS:** the system may refuse to open a downloaded script. Right-click
+> `Start SolrWayback.command` → **Open** → **Open**. You only do this once.
+
+> **Windows:** if you point `SW_WARC_DIR` somewhere other than the default
+> `warcs` folder, write the path with forward slashes — `C:/Users/me/archives`,
+> not `C:\Users\me\archives`. Docker Desktop's memory limit is set in
+> `.wslconfig`, not in the Docker Desktop settings window.
+
+> **Linux:** double-clicking may need **Run in Terminal** rather than opening
+> an editor, or run `./"Start SolrWayback.sh"` from a terminal. The container
+> reads your WARCs as user id 1000; on Linux that id is taken literally, so if
+> indexing finds nothing, run `chmod -R a+rX warcs`. There is no Docker Desktop
+> memory slider — the container uses host RAM directly, so `SW_HEAP` is the
+> setting that matters.
 
 ### From the command line
 
@@ -58,22 +80,50 @@ docker compose exec solrwayback index
 
 ## Publishing the image (maintainer only)
 
-Users pull a prebuilt image rather than building locally. To publish a new one:
+Users pull a prebuilt image rather than building it themselves. The image lives
+in the GitHub Container Registry (`ghcr.io`) under the WEB-CHILD organisation,
+as `ghcr.io/web-child/solrwayback`.
+
+**One-time setup**
+
+1. Create a **classic** personal access token at
+   <https://github.com/settings/tokens> with the `write:packages` scope.
+   Fine-grained tokens cannot write to the container registry.
+2. If WEB-CHILD enforces SAML SSO, click **Configure SSO** on the token and
+   authorise the organisation. Without that, every push fails with 403.
+3. Log Docker in. The username is your own GitHub login, not the org name --
+   the token is what grants access to the org:
+
+   ```bash
+   echo "$TOKEN" | docker login ghcr.io -u <your-github-username> --password-stdin
+   ```
+
+**Every release**
 
 ```bash
-# One-time: a GitHub token with the write:packages scope
-echo "$TOKEN" | docker login ghcr.io -u <github-username> --password-stdin
-
-./publish.sh
+./publish.sh                 # current version, from SW_VERSION in the script
+SW_VERSION=5.5.0 ./publish.sh   # or override it
 ```
 
-`publish.sh` builds for both Apple Silicon and Intel and pushes to
-`ghcr.io/jorntx/solrwayback`. Build for both: a single-architecture image fails
-on the other kind of Mac. Make the package **public** in its GitHub settings,
-or users will be prompted to log in.
+The script builds for `linux/amd64` **and** `linux/arm64` and pushes both under
+one tag. This is not optional: a plain `docker build && docker push` from an
+Apple Silicon Mac produces an arm64-only image that fails outright on every
+Intel Mac. `docker buildx` is what makes the two-architecture push possible; the
+script creates its builder on first run.
 
-If no published image exists, `docker compose up` and the Start script both
-fall back to building locally, so the project works either way.
+Two tags are pushed each time: `:5.4.3` (immutable, what `compose.yaml` pins)
+and `:latest` (a moving pointer, for convenience).
+
+**After the first push only**
+
+Open <https://github.com/orgs/WEB-CHILD/packages>, pick `solrwayback`, then
+**Package settings -> Change visibility -> Public**. New packages are private by
+default, and a private one prompts every user for a login, which defeats the
+point. The setting persists across later pushes.
+
+If no published image exists, or the pull fails, `docker compose up` and the
+Start script fall back to building locally, so the project works either way --
+users just wait through a long first run.
 
 ## Configuration
 
@@ -202,3 +252,13 @@ curl -s "http://localhost:8990/solr/netarchivebuilder/select?q=*:*&rows=1&fl=sou
 **Indexing was interrupted** — just run `docker compose exec solrwayback index`
 again. The wrapper detects WARCs left half-processed, clears their state, and
 reprocesses them.
+
+## License
+
+This repository — the Dockerfile, Compose file, launcher scripts and helper
+scripts — is licensed under the Apache License 2.0. See [LICENSE](LICENSE).
+
+SolrWayback itself is a separate project by the Royal Danish Library, also
+Apache 2.0 licensed. The image downloads its official release bundle at build
+time rather than redistributing a modified copy:
+<https://github.com/netarchivesuite/solrwayback>
