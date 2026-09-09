@@ -38,8 +38,20 @@ few minutes while it downloads SolrWayback. Your browser opens automatically at
 Large archives take a while to index — roughly an hour per 15 GB — and the site
 fills in as it goes, so you can search while it works.
 
+**To follow what it is doing:** open Docker Desktop, click the `solrwayback`
+container, and select the **Logs** tab. Indexing progress, warnings and errors
+all show up there. This is also the first place to look if something seems
+stuck or a WARC file does not turn up in search results. The logs keep running
+even after you close the terminal window that started it.
+
 **To add more archives later:** drop them in the `warcs` folder and double-click
-`Start SolrWayback` again. Files already indexed are skipped.
+`Start SolrWayback` again. Files already indexed are skipped, so nothing is
+done twice.
+
+If the container is already set up, you do not need the start script for this —
+stopping and starting `solrwayback` from Docker Desktop does the same thing.
+Indexing runs every time the container starts, and picks up whatever is in the
+`warcs` folder at that moment.
 
 **To shut down:** double-click `Stop SolrWayback`, or open Docker Desktop and
 press the stop button next to the `solrwayback` container. Either way your
