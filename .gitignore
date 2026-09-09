@@ -4,6 +4,7 @@
 .env.*
 !.env.example
 
+
 # WARC files live here by default; keep the directory, not its contents, so the
 # default bind mount target exists on a fresh clone.
 warcs/*
@@ -11,3 +12,6 @@ warcs/*
 
 # Operator property overrides
 conf/*.properties
+
+OS
+.DS_store
