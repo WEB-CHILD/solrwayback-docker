@@ -4,8 +4,8 @@
 # tree, so the image is reproducible on any machine and this repo stays tiny.
 FROM eclipse-temurin:17-jre
 
-ARG SW_VERSION=5.4.3
-ARG SW_SHA256=833200a063ad2b8787d0068854a8f4fb27ce7a8b9658cd59b54d8ce593a6602c
+ARG SW_VERSION=5.5.0
+ARG SW_SHA256=ec90763a9f14978d844a9c08eab4328706335e9b5ef0a421b1edf9df6e1542a3
 ARG SW_UID=1000
 
 # Links the published package to its GitHub repository. Without this label the
